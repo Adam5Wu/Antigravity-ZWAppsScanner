@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none">
+  <rect x="14" y="14" width="100" height="100" rx="22" fill="#0F172A" stroke="#38BDF8" stroke-width="5"/>
+  <!-- MCU pins -->
+  <path d="M46 28V38M64 28V38M82 28V38M46 90V100M64 90V100M82 90V100M28 46H38M28 64H38M28 82H38M90 64H100M90 82H100" stroke="#94A3B8" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- MCU body -->
+  <rect x="38" y="38" width="52" height="52" rx="10" fill="#1E293B" stroke="#E2E8F0" stroke-width="4"/>
+  <!-- Wireless radar waves top-right -->
+  <path d="M75 43C80.5 43 85 47.5 85 53" stroke="#38BDF8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M75 33C86 33 95 42 95 53" stroke="#38BDF8" stroke-width="4" stroke-linecap="round"/>
+  <!-- Core status indicator -->
+  <circle cx="56" cy="72" r="7" fill="#4ADE80"/>
+</svg>

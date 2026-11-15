@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ZW Appliances</title>
+  <script src="/preload.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="title-row">
+        <div class="title-group">
+          <h1 class="title">ZW Appliances</h1>
+          <span id="summary-badge" class="summary-badge">Ready</span>
+        </div>
+        <span id="last-scan" class="last-scan">Not scanned yet</span>
+      </div>
+
+      <form id="scan-form" class="range-bar" autocomplete="off">
+        <div class="range-group" title="Subnet prefix and last-octet scan range (supports mouse wheel or pasting e.g. 192.168.1.32-127)">
+          <input
+            id="range-prefix"
+            class="range-prefix"
+            type="text"
+            value="192.168.1"
+            aria-label="IPv4 /24 subnet prefix"
+            spellcheck="false"
+          >
+          <span class="range-dot">.</span>
+          <input
+            id="range-start"
+            class="range-octet"
+            type="number"
+            min="1"
+            max="254"
+            value="1"
+            aria-label="Start host octet"
+          >
+          <span class="range-sep">–</span>
+          <input
+            id="range-end"
+            class="range-octet"
+            type="number"
+            min="1"
+            max="254"
+            value="254"
+            aria-label="End host octet"
+          >
+          <button
+            id="range-reset"
+            type="button"
+            class="range-all-btn hidden"
+            title="Reset range to full subnet (1–254)"
+          >All</button>
+        </div>
+
+        <button id="scan-btn" type="submit" class="scan-btn">
+          <svg class="icon scan-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1M13.5 2.5v3h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="scan-btn-label">Scan</span>
+          <span id="scan-countdown-bar" class="scan-countdown-bar"></span>
+        </button>
+      </form>
+
+      <div id="scan-progress-wrap" class="scan-progress-wrap" aria-hidden="true">
+        <div id="scan-progress-bar" class="scan-progress-bar"></div>
+      </div>
+    </header>
+
+    <div id="toast" class="toast hidden" role="alert"></div>
+
+    <main class="content">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-title">No appliances listed yet</div>
+        <p class="empty-desc">
+          Adjust the subnet or DHCP range above if needed, then click <strong>Scan</strong> to discover
+          <code>ESPZWApplianceT2</code> devices.
+        </p>
+      </div>
+
+      <div id="device-list" class="device-list hidden" role="list"></div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

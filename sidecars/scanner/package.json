@@ -1,0 +1,6 @@
+{
+  "name": "zw_appliance_scanner",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ESPZWApplianceT2 subnet scanner and management sidecar"
+}

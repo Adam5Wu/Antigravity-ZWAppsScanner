@@ -1,0 +1,17 @@
+{
+  "name": "esp-zw-app-scanner",
+  "displayName": "ZW Appliances",
+  "version": "1.0.0",
+  "description": "Antigravity side panel and subnet scanner for ESPZWApplianceT2 microcontroller appliances: discover mixed firmware fleets, inspect firmware & hardware MACs, edit on-device locations or local nicknames, and trigger verified reboots.",
+  "author": {
+    "name": "Zhenyu Wu",
+    "url": "https://github.com/Adam5Wu"
+  },
+  "repository": "https://github.com/Adam5Wu/Antigravity-ZWAppsScanner",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Open the ZW Appliances side panel",
+    "Scan my local subnet for active ESPZWApplianceT2 devices",
+    "List my ZW appliances with their locations, hostnames, MACs, and firmware versions"
+  ]
+}

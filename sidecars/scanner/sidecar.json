@@ -1,0 +1,18 @@
+{
+  "command": "node",
+  "args": ["main.mjs"],
+  "restart_policy": "always",
+  "display_name": "ZW Appliances",
+  "description": "On-demand subnet scanner and device manager for ESPZWApplianceT2 microcontroller projects.",
+  "has_web_ui": true,
+  "ui_config": {
+    "display_name": "ZW Appliances",
+    "views": [
+      {
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "title": "ZW Appliances"
+      }
+    ]
+  }
+}
