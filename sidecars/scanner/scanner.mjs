@@ -425,9 +425,6 @@ export async function probeAppliance(ip, { timeoutMs = 750, retries = 1 } = {}) 
       buildTime: disc.buildTime,
       idfVer: '',
       runningSlot: null,
-      nextBootPending: false,
-      nextProject: null,
-      nextVersion: null,
       otaRestricted: false,
       latencyMs: disc.latencyMs,
       lastSeenAt: new Date().toISOString(),
@@ -450,9 +447,6 @@ export async function probeAppliance(ip, { timeoutMs = 750, retries = 1 } = {}) 
   let buildTime = null;
   let idfVer = null;
   let runningSlot = null;
-  let nextBootPending = false;
-  let nextProject = null;
-  let nextVersion = null;
   let otaRestricted = false;
 
   // Sequential request: /!sys/ota/state (`cur_part` is always emitted at index [0])
@@ -467,14 +461,6 @@ export async function probeAppliance(ip, { timeoutMs = 750, retries = 1 } = {}) 
         buildTime = cur.build_time || null;
         idfVer = cur.idf_ver || null;
         runningSlot = typeof cur.index === 'number' ? cur.index : null;
-        if (cur.next !== true) {
-          const nextSlot = slots.find((s) => s && s.next === true);
-          if (nextSlot) {
-            nextBootPending = true;
-            nextProject = nextSlot.image_name || null;
-            nextVersion = nextSlot.image_ver || null;
-          }
-        }
       }
     } catch {
       // Malformed JSON fallback below
@@ -506,9 +492,6 @@ export async function probeAppliance(ip, { timeoutMs = 750, retries = 1 } = {}) 
     buildTime: buildTime || '',
     idfVer: idfVer || '',
     runningSlot,
-    nextBootPending,
-    nextProject,
-    nextVersion,
     otaRestricted,
     latencyMs: disc.latencyMs,
     lastSeenAt: new Date().toISOString(),

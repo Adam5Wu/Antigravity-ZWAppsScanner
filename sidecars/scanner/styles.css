@@ -654,15 +654,6 @@ button:disabled {
   white-space: nowrap;
 }
 
-.next-badge {
-  font-size: 10.5px;
-  padding: 1px 5px;
-  border-radius: var(--r-sm);
-  background: var(--zw-warning-bg);
-  color: var(--zw-warning);
-  border: 1px solid color-mix(in srgb, var(--zw-warning) 35%, transparent);
-}
-
 /* ---------- Card Action Buttons (Configure + Two-Step Armed Reboot) ---------- */
 .card-actions {
   display: inline-flex;

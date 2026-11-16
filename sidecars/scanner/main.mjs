@@ -102,8 +102,9 @@ function loadPersistedState() {
     if (raw?.knownDevices && typeof raw.knownDevices === 'object') {
       for (const [ip, dev] of Object.entries(raw.knownDevices)) {
         if (isValidIpv4(ip) && dev && typeof dev === 'object') {
+          const { nextBootPending, nextProject, nextVersion, ...restDev } = dev;
           knownDevices[ip] = {
-            ...dev,
+            ...restDev,
             ip,
             mac: isValidMac(dev.mac) ? String(dev.mac).trim().toUpperCase() : '',
             supportsDiscover: Boolean(dev.supportsDiscover),
@@ -364,9 +365,6 @@ function buildDeviceList() {
       version: known.version || '',
       buildTime: known.buildTime || '',
       runningSlot: typeof known.runningSlot === 'number' ? known.runningSlot : null,
-      nextBootPending: Boolean(known.nextBootPending),
-      nextProject: known.nextProject || '',
-      nextVersion: known.nextVersion || '',
       bootSerial: known.bootSerial || '',
       latencyMs: typeof known.latencyMs === 'number' ? known.latencyMs : null,
       lastSeenAt: known.lastSeenAt || null,

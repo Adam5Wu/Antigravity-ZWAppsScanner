@@ -797,9 +797,6 @@
 
     const verHtml = dev.version ? `<span class="ver-text">v${esc(dev.version)}</span>` : '';
     const buildHtml = dev.buildTime ? `<span class="build-text">(${esc(dev.buildTime)})</span>` : '';
-    const nextHtml = dev.nextBootPending
-      ? `<span class="next-badge" title="Staged OTA image will boot after reboot">next: ${esc(dev.nextProject || 'alt')} ${esc(dev.nextVersion || '')}</span>`
-      : '';
 
     // Configure + Reboot button states
     const cfgDisabled = dev.status !== 'online';
@@ -861,7 +858,6 @@
             ${projBadge}
             ${verHtml}
             ${buildHtml}
-            ${nextHtml}
           </div>
           <div class="card-actions">
             <button

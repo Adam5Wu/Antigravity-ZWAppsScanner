@@ -16,7 +16,7 @@ An Auxiliary Side Pane (**ZW Appliances**), ESP8266-safe subnet discovery engine
 
 Developing and maintaining multiple Wi-Fi microcontroller appliances built on [`ESPZWApplianceT2`](https://github.com/Adam5Wu/ESPZWApplianceT2) (such as [`TWiLight`](https://github.com/Adam5Wu/TWiLight) or [`ESPClockMovementMod`](https://github.com/Adam5Wu/ESPClockMovementMod)) across a local subnet runs into several day-to-day friction points:
 
-1. **Dynamic DHCP Leases & Mixed Firmware Fleets**: Appliances move across DHCP addresses over time and run a mix of newer (`v1.1.11+` with `/!sys/discover`) and older (`<= v1.1.10`) middleware builds. Tracking which IP corresponds to which physical unit, firmware build, or staged OTA slot by hand quickly gets stale.
+1. **Dynamic DHCP Leases & Mixed Firmware Fleets**: Appliances move across DHCP addresses over time and run a mix of newer (`v1.1.11+` with `/!sys/discover`) and older (`<= v1.1.10`) middleware builds. Tracking which IP corresponds to which physical unit or firmware build by hand quickly gets stale.
 2. **ESP8266 lwIP & Modem-Sleep Constraints**: Aggressive generic network scanners open concurrent HTTP keep-alive connections per IP (exhausting scarce ESP8266 lwIP sockets), miss devices resting in `WIFI_PS_MIN_MODEM` DTIM beacon sleep (up to ~`550 ms` first-packet wakeup latency), or accidentally hit endpoints like `/!sys/prov/sta.aplist` that trigger blocking active Wi-Fi scans on the MCU.
 3. **Agentic Deployment Context**: When asking an AI agent in Antigravity to *"push the updated web UI to the desk lamp"* or *"check which devices are still on `v1.1.10`"*, the agent needs an up-to-date local inventory mapping human locations, hostnames, MAC addresses, and nicknames to live IPv4 addresses and `boot_serial` tokens.
 
@@ -166,7 +166,7 @@ Emits structured JSON to `stdout`:
 | Firmware Version | Discovery Path | Supported Capabilities |
 | :--- | :--- | :--- |
 | **`ESPZWApplianceT2 v1.1.11+`** | Single `GET /!sys/discover` | Fast 1-request discovery, hardware `mac` tracking across DHCP IP changes, MAC-bound local nicknames, `hostname` display, inline on-device `location` editing (`PUT /!sys/config?section=identity`), and verified reboot. |
-| **Legacy (`<= v1.1.10`)** | `GET /!sys/boot_serial` → `GET /!sys/ota/state` *(→ `<title>` fallback if `403`)* | Firmware project/version/build timestamp, staged OTA `next:` badge when an alternate slot is pending reboot, IP-bound local nicknames, Web UI links, and verified reboot. |
+| **Legacy (`<= v1.1.10`)** | `GET /!sys/boot_serial` → `GET /!sys/ota/state` *(→ `<title>` fallback if `403`)* | Firmware project/version/build timestamp, IP-bound local nicknames, Web UI links, and verified reboot. |
 
 ---
 
