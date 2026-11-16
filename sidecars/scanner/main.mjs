@@ -2,8 +2,9 @@
  * Antigravity Sidecar Backend for ZW Appliances (`esp-zw-app-scanner/scanner`).
  *
  * Hosts the Auxiliary Side Pane UI and exposes local loopback endpoints for:
- *   - GET  /api/state           (ETag-gated snapshot of scan config, progress, identities/nicknames, and devices)
+ *   - GET  /api/state           (ETag-gated snapshot of scan config, sort rules, progress, identities/nicknames, and devices)
  *   - POST /api/config          (Update persisted scan range { prefix, start, end })
+ *   - POST /api/sort            (Update persisted cascading sort rules { sortRules })
  *   - POST /api/scan            (Trigger on-demand async subnet/range scan)
  *   - POST /api/refresh         (Re-probe all currently known/listed device entries)
  *   - POST /api/nickname        (Save/clear local nickname; MAC-indexed on v1.1.11+ devices)
@@ -26,10 +27,12 @@ import {
   isValidIpv4,
   isValidMac,
   normalizeScanConfig,
+  normalizeSortRules,
   parseRangeExpression,
   prepareReboot,
   probeAppliance,
   scanIps,
+  sortDevices,
   triggerReboot,
   updateApplianceLocation,
   validateLocation,
@@ -70,6 +73,7 @@ function loadPersistedState() {
   const fallback = {
     version: 2,
     scanConfig: { ...initialScanConfig },
+    sortRules: normalizeSortRules(),
     lastScanAt: null,
     lastScanDurationMs: null,
     nicknames: {},
@@ -81,6 +85,7 @@ function loadPersistedState() {
     if (!existsSync(STATE_FILE)) return fallback;
     const raw = JSON.parse(readFileSync(STATE_FILE, 'utf-8'));
     const scanConfig = normalizeScanConfig(raw?.scanConfig || initialScanConfig);
+    const sortRules = normalizeSortRules(raw?.sortRules);
     const nicknames = {};
     if (raw?.nicknames && typeof raw.nicknames === 'object') {
       for (const [ip, name] of Object.entries(raw.nicknames)) {
@@ -121,6 +126,7 @@ function loadPersistedState() {
     return {
       version: 2,
       scanConfig,
+      sortRules,
       lastScanAt: typeof raw?.lastScanAt === 'string' ? raw.lastScanAt : null,
       lastScanDurationMs: typeof raw?.lastScanDurationMs === 'number' ? raw.lastScanDurationMs : null,
       nicknames,
@@ -341,8 +347,7 @@ function buildDeviceList() {
     ips.add(ip);
   }
 
-  const sortedIps = [...ips].sort(compareIps);
-  return sortedIps.map((ip) => {
+  const entries = [...ips].map((ip) => {
     const known = persisted.knownDevices[ip] || {};
     const nickname = persisted.nicknames[ip] || (known.mac ? persisted.macNicknames[known.mac] || '' : '');
     const reb = activeReboots.get(ip);
@@ -372,6 +377,8 @@ function buildDeviceList() {
       url: `http://${ip}/`,
     };
   });
+
+  return sortDevices(entries, persisted.sortRules);
 }
 
 function getEtag() {
@@ -676,6 +683,7 @@ app.api(
       unchanged: false,
       etag,
       scanConfig: persisted.scanConfig,
+      sortRules: persisted.sortRules,
       activeScan,
       lastScanAt: persisted.lastScanAt,
       lastScanDurationMs: persisted.lastScanDurationMs,
@@ -697,6 +705,14 @@ app.api('/api/config', (data) => {
   bumpRevision();
   savePersistedState();
   return { ok: true, scanConfig: cfg, etag: getEtag() };
+}, 'POST');
+
+app.api('/api/sort', (data) => {
+  const sortRules = normalizeSortRules(data?.sortRules);
+  persisted.sortRules = sortRules;
+  bumpRevision();
+  savePersistedState();
+  return { ok: true, sortRules, etag: getEtag() };
 }, 'POST');
 
 app.api('/api/scan', (data) => {

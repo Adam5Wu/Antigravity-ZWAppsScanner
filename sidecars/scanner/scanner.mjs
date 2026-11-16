@@ -64,6 +64,194 @@ export function compareIps(a, b) {
   return ipToSortableInt(a) - ipToSortableInt(b);
 }
 
+export const MAX_SORT_RULES = 3;
+
+export const VALID_SORT_KEYS = Object.freeze([
+  'ip',
+  'name',
+  'nickname',
+  'hostname',
+  'location',
+  'app',
+]);
+
+export const DEFAULT_SORT_RULES = Object.freeze([
+  Object.freeze({ key: 'ip', dir: 'asc' }),
+]);
+
+const VALID_SORT_KEY_SET = new Set(VALID_SORT_KEYS);
+const NATURAL_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
+const BUILD_MONTHS = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+/**
+ * Normalizes an array of sort rules into 1..3 deduplicated `{ key, dir }` entries,
+ * falling back to `[{ key: 'ip', dir: 'asc' }]` if empty or invalid.
+ */
+export function normalizeSortRules(input) {
+  if (!Array.isArray(input)) {
+    return DEFAULT_SORT_RULES.map((r) => ({ ...r }));
+  }
+  const seen = new Set();
+  const normalized = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') continue;
+    const key = String(item.key || '').trim().toLowerCase();
+    if (!VALID_SORT_KEY_SET.has(key) || seen.has(key)) continue;
+    const dir = String(item.dir || '').trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
+    seen.add(key);
+    normalized.push({ key, dir });
+    if (normalized.length >= MAX_SORT_RULES) break;
+  }
+  return normalized.length > 0 ? normalized : DEFAULT_SORT_RULES.map((r) => ({ ...r }));
+}
+
+/**
+ * Parses C `__DATE__ " " __TIME__` firmware build strings (e.g. `"Jul 14 2025 22:08:26"`,
+ * `"Nov  5 2026 08:01:02"`) or ISO timestamps into epoch milliseconds, or `null` if invalid.
+ */
+export function parseBuildTimestamp(str) {
+  const s = String(str ?? '').trim();
+  if (!s) return null;
+  const m = /^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/.exec(s);
+  if (m) {
+    const mon = BUILD_MONTHS[m[1].toLowerCase()];
+    if (mon !== undefined) {
+      return Date.UTC(
+        Number(m[3]),
+        mon,
+        Number(m[2]),
+        Number(m[4]),
+        Number(m[5]),
+        Number(m[6])
+      );
+    }
+  }
+  const parsed = Date.parse(s);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * Compares two firmware version strings newest-to-oldest (descending semver).
+ * Empty versions always sort last.
+ */
+export function compareVersionsDesc(verA, verB) {
+  const rawA = String(verA ?? '').trim().replace(/^[vV]/, '');
+  const rawB = String(verB ?? '').trim().replace(/^[vV]/, '');
+  if (!rawA && !rawB) return 0;
+  if (!rawA) return 1;
+  if (!rawB) return -1;
+
+  const [coreA, preA = ''] = rawA.split('-', 2);
+  const [coreB, preB = ''] = rawB.split('-', 2);
+  const segsA = coreA.split('.');
+  const segsB = coreB.split('.');
+  const maxLen = Math.max(segsA.length, segsB.length);
+
+  for (let i = 0; i < maxLen; i++) {
+    const sA = segsA[i] ?? '0';
+    const sB = segsB[i] ?? '0';
+    const nA = /^\d+$/.test(sA) ? Number(sA) : NaN;
+    const nB = /^\d+$/.test(sB) ? Number(sB) : NaN;
+    if (!Number.isNaN(nA) && !Number.isNaN(nB)) {
+      if (nA !== nB) return nB - nA; // newest first
+    } else {
+      const cmp = NATURAL_COLLATOR.compare(sB, sA);
+      if (cmp !== 0) return cmp;
+    }
+  }
+
+  // Semver: release (no pre-release tag) is newer than pre-release of the same core version
+  if (!preA && preB) return -1;
+  if (preA && !preB) return 1;
+  if (preA && preB) {
+    return NATURAL_COLLATOR.compare(preB, preA);
+  }
+  return 0;
+}
+
+function compareBuildTimesDesc(buildA, buildB) {
+  const sA = String(buildA ?? '').trim();
+  const sB = String(buildB ?? '').trim();
+  if (!sA && !sB) return 0;
+  if (!sA) return 1;
+  if (!sB) return -1;
+
+  const tA = parseBuildTimestamp(sA);
+  const tB = parseBuildTimestamp(sB);
+  if (tA !== null && tB !== null) {
+    return tB - tA; // newest first
+  }
+  if (tA !== null) return -1;
+  if (tB !== null) return 1;
+  return NATURAL_COLLATOR.compare(sB, sA);
+}
+
+function compareNullableNatural(valA, valB, sign) {
+  const sA = String(valA ?? '').trim();
+  const sB = String(valB ?? '').trim();
+  if (!sA && !sB) return 0;
+  if (!sA) return 1; // empty values always sort last
+  if (!sB) return -1;
+  return NATURAL_COLLATOR.compare(sA, sB) * sign;
+}
+
+function compareSingleSortRule(a, b, rule) {
+  const sign = rule.dir === 'desc' ? -1 : 1;
+  switch (rule.key) {
+    case 'ip':
+      return compareIps(a?.ip || '', b?.ip || '') * sign;
+    case 'name': {
+      const effA = String(a?.nickname || a?.hostname || '').trim();
+      const effB = String(b?.nickname || b?.hostname || '').trim();
+      return compareNullableNatural(effA, effB, sign);
+    }
+    case 'nickname':
+      return compareNullableNatural(a?.nickname, b?.nickname, sign);
+    case 'hostname':
+      return compareNullableNatural(a?.hostname, b?.hostname, sign);
+    case 'location':
+      return compareNullableNatural(a?.location, b?.location, sign);
+    case 'app': {
+      const projCmp = compareNullableNatural(a?.project, b?.project, sign);
+      if (projCmp !== 0) return projCmp;
+      // Within the same app name, version + build datetime always sort newest -> oldest
+      const verCmp = compareVersionsDesc(a?.version, b?.version);
+      if (verCmp !== 0) return verCmp;
+      return compareBuildTimesDesc(a?.buildTime, b?.buildTime);
+    }
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Compares two device entries using up to 3 cascading `sortRules`,
+ * with ascending IPv4 address as the deterministic final tie-breaker.
+ */
+export function compareDevices(a, b, sortRules = DEFAULT_SORT_RULES) {
+  const rules = Array.isArray(sortRules) && sortRules.length > 0 ? sortRules : DEFAULT_SORT_RULES;
+  for (const rule of rules) {
+    const cmp = compareSingleSortRule(a, b, rule);
+    if (cmp !== 0) return cmp;
+  }
+  return compareIps(a?.ip || '', b?.ip || '');
+}
+
+/**
+ * Returns a new sorted copy of `devices` ordered by normalized `sortRules`.
+ */
+export function sortDevices(devices, sortRules = DEFAULT_SORT_RULES) {
+  if (!Array.isArray(devices) || devices.length === 0) return [];
+  const rules = normalizeSortRules(sortRules);
+  return [...devices].sort((a, b) => compareDevices(a, b, rules));
+}
+
 /**
  * Validates location identically to ESPZWApplianceT2 AppConfig & zw_sysmgmt.js.
  * Returns `null` if valid, or a human-readable error message.

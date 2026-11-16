@@ -63,7 +63,7 @@ html, body {
   display: none !important;
 }
 
-button, input {
+button, input, select {
   font: inherit;
   color: inherit;
 }
@@ -296,6 +296,154 @@ button:disabled {
   width: 0%;
   background: var(--zw-primary);
   transition: width 160ms linear;
+}
+
+/* ---------- Inline Cascading Sort Bar ---------- */
+.sort-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--zw-border);
+}
+
+.sort-bar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--zw-fg-muted);
+  margin-right: 1px;
+  flex: 0 0 auto;
+}
+
+.sort-sep {
+  color: var(--zw-fg-faint);
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+  padding: 0 1px;
+}
+
+.sort-pill {
+  display: inline-flex;
+  align-items: stretch;
+  background: var(--zw-field);
+  border: 1px solid var(--zw-border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  min-height: 22px;
+  transition: border-color 120ms ease;
+}
+
+.sort-pill:focus-within {
+  border-color: var(--zw-primary);
+  box-shadow: 0 0 0 1px var(--zw-ring);
+}
+
+.sort-key-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px 2px 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--zw-fg);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sort-key-wrap:hover {
+  background: var(--zw-hover);
+}
+
+.sort-key-caret {
+  color: var(--zw-fg-muted);
+  flex: 0 0 auto;
+}
+
+.sort-key-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sort-key-select:focus-visible {
+  outline: none;
+}
+
+.sort-key-select option {
+  background: var(--zw-card);
+  color: var(--zw-fg);
+}
+
+.sort-dir-btn,
+.sort-rm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-left: 1px solid var(--zw-border);
+  background: transparent;
+  padding: 0 5px;
+  font-size: 11.5px;
+  line-height: 1;
+  user-select: none;
+}
+
+.sort-dir-btn {
+  font-family: var(--zw-mono);
+  font-weight: 600;
+  color: var(--zw-primary);
+  min-width: 19px;
+}
+
+.sort-dir-btn:hover {
+  background: var(--zw-hover);
+}
+
+.sort-rm-btn {
+  color: var(--zw-fg-muted);
+  font-size: 12.5px;
+  padding: 0 4px;
+}
+
+.sort-rm-btn:hover {
+  background: color-mix(in srgb, var(--zw-error) 14%, transparent);
+  color: var(--zw-error);
+}
+
+.sort-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px dashed var(--zw-border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--zw-fg-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0;
+  user-select: none;
+}
+
+.sort-add-btn:hover {
+  border-style: solid;
+  border-color: var(--zw-fg-muted);
+  background: var(--zw-hover);
+  color: var(--zw-fg);
 }
 
 /* ---------- Toast ---------- */

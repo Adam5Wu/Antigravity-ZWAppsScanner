@@ -15,13 +15,34 @@
   const REFRESH_POLL_MS = 200;
   const TWO_CLICK_ARM_TTL_MS = 1500;
   const CARD_ERROR_TTL_MS = 5000;
+  const MAX_SORT_RULES = 3;
   const UTF8_ENCODER = new TextEncoder();
+  const NATURAL_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const BUILD_MONTHS = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  };
+
+  const SORT_OPTIONS = [
+    { key: 'ip',       short: 'IP',       full: 'IP Address' },
+    { key: 'name',     short: 'Name',     full: 'Effective Name (Nick / Host)' },
+    { key: 'nickname', short: 'Nick',     full: 'Nick Name' },
+    { key: 'hostname', short: 'Host',     full: 'Host Name' },
+    { key: 'location', short: 'Location', full: 'Location' },
+    { key: 'app',      short: 'App',      full: 'App Name (ver + build)' },
+  ];
+  const SORT_OPTION_MAP = Object.fromEntries(SORT_OPTIONS.map((o) => [o.key, o]));
+  const ADD_SORT_FALLBACK_ORDER = ['name', 'location', 'app', 'nickname', 'hostname', 'ip'];
 
   const $ = (id) => document.getElementById(id);
 
   const ui = {
     etag: '',
     snap: null,
+    sortRules: [{ key: 'ip', dir: 'asc' }],
+    sortPending: false,
+    sortPendingSeq: 0,
+    renderedSortSig: '',
     rangeInitialized: false,
     initialRefreshDone: false,
     panelWasHidden: false,
@@ -54,6 +75,140 @@
       return 'Location must be at most 64 UTF-8 bytes.';
     }
     return null;
+  }
+
+  // ---------- Cascading Device Sort Helpers ----------
+  function normalizeSortRules(input) {
+    if (!Array.isArray(input)) return [{ key: 'ip', dir: 'asc' }];
+    const seen = new Set();
+    const out = [];
+    for (const item of input) {
+      if (!item || typeof item !== 'object') continue;
+      const key = String(item.key || '').trim().toLowerCase();
+      if (!SORT_OPTION_MAP[key] || seen.has(key)) continue;
+      const dir = String(item.dir || '').trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
+      seen.add(key);
+      out.push({ key, dir });
+      if (out.length >= MAX_SORT_RULES) break;
+    }
+    return out.length > 0 ? out : [{ key: 'ip', dir: 'asc' }];
+  }
+
+  function ipToSortableInt(ip) {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(ip || ''));
+    if (!m) return 0;
+    return (((Number(m[1]) << 24) >>> 0) + (Number(m[2]) << 16) + (Number(m[3]) << 8) + Number(m[4])) >>> 0;
+  }
+
+  function compareIps(a, b) {
+    return ipToSortableInt(a) - ipToSortableInt(b);
+  }
+
+  function parseBuildTimestamp(str) {
+    const s = String(str ?? '').trim();
+    if (!s) return null;
+    const m = /^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/.exec(s);
+    if (m) {
+      const mon = BUILD_MONTHS[m[1].toLowerCase()];
+      if (mon !== undefined) {
+        return Date.UTC(Number(m[3]), mon, Number(m[2]), Number(m[4]), Number(m[5]), Number(m[6]));
+      }
+    }
+    const parsed = Date.parse(s);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  function compareVersionsDesc(verA, verB) {
+    const rawA = String(verA ?? '').trim().replace(/^[vV]/, '');
+    const rawB = String(verB ?? '').trim().replace(/^[vV]/, '');
+    if (!rawA && !rawB) return 0;
+    if (!rawA) return 1;
+    if (!rawB) return -1;
+
+    const [coreA, preA = ''] = rawA.split('-', 2);
+    const [coreB, preB = ''] = rawB.split('-', 2);
+    const segsA = coreA.split('.');
+    const segsB = coreB.split('.');
+    const maxLen = Math.max(segsA.length, segsB.length);
+
+    for (let i = 0; i < maxLen; i++) {
+      const sA = segsA[i] ?? '0';
+      const sB = segsB[i] ?? '0';
+      const nA = /^\d+$/.test(sA) ? Number(sA) : NaN;
+      const nB = /^\d+$/.test(sB) ? Number(sB) : NaN;
+      if (!Number.isNaN(nA) && !Number.isNaN(nB)) {
+        if (nA !== nB) return nB - nA;
+      } else {
+        const cmp = NATURAL_COLLATOR.compare(sB, sA);
+        if (cmp !== 0) return cmp;
+      }
+    }
+
+    if (!preA && preB) return -1;
+    if (preA && !preB) return 1;
+    if (preA && preB) return NATURAL_COLLATOR.compare(preB, preA);
+    return 0;
+  }
+
+  function compareBuildTimesDesc(buildA, buildB) {
+    const sA = String(buildA ?? '').trim();
+    const sB = String(buildB ?? '').trim();
+    if (!sA && !sB) return 0;
+    if (!sA) return 1;
+    if (!sB) return -1;
+
+    const tA = parseBuildTimestamp(sA);
+    const tB = parseBuildTimestamp(sB);
+    if (tA !== null && tB !== null) return tB - tA;
+    if (tA !== null) return -1;
+    if (tB !== null) return 1;
+    return NATURAL_COLLATOR.compare(sB, sA);
+  }
+
+  function compareNullableNatural(valA, valB, sign) {
+    const sA = String(valA ?? '').trim();
+    const sB = String(valB ?? '').trim();
+    if (!sA && !sB) return 0;
+    if (!sA) return 1; // empty values always sort last
+    if (!sB) return -1;
+    return NATURAL_COLLATOR.compare(sA, sB) * sign;
+  }
+
+  function compareSingleSortRule(a, b, rule) {
+    const sign = rule.dir === 'desc' ? -1 : 1;
+    switch (rule.key) {
+      case 'ip':
+        return compareIps(a.ip, b.ip) * sign;
+      case 'name':
+        return compareNullableNatural(a.nickname || a.hostname || '', b.nickname || b.hostname || '', sign);
+      case 'nickname':
+        return compareNullableNatural(a.nickname, b.nickname, sign);
+      case 'hostname':
+        return compareNullableNatural(a.hostname, b.hostname, sign);
+      case 'location':
+        return compareNullableNatural(a.location, b.location, sign);
+      case 'app': {
+        const projCmp = compareNullableNatural(a.project, b.project, sign);
+        if (projCmp !== 0) return projCmp;
+        const verCmp = compareVersionsDesc(a.version, b.version);
+        if (verCmp !== 0) return verCmp;
+        return compareBuildTimesDesc(a.buildTime, b.buildTime);
+      }
+      default:
+        return 0;
+    }
+  }
+
+  function sortDevices(devices, sortRules) {
+    if (!Array.isArray(devices) || devices.length === 0) return [];
+    const rules = normalizeSortRules(sortRules);
+    return [...devices].sort((a, b) => {
+      for (const rule of rules) {
+        const cmp = compareSingleSortRule(a, b, rule);
+        if (cmp !== 0) return cmp;
+      }
+      return compareIps(a.ip, b.ip);
+    });
   }
 
   // ---------- Host Theme Sync ----------
@@ -625,6 +780,160 @@
     window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
   }
 
+  // ---------- Cascading Sort Bar Controls ----------
+  function nextUnusedSortKey(rules) {
+    const used = new Set(rules.map((r) => r.key));
+    return ADD_SORT_FALLBACK_ORDER.find((k) => !used.has(k)) || 'ip';
+  }
+
+  function formatDirTooltip(rule) {
+    if (rule.key === 'app') {
+      return rule.dir === 'asc'
+        ? 'App Name A → Z (version & build: newest first) — click to flip'
+        : 'App Name Z → A (version & build: newest first) — click to flip';
+    }
+    if (rule.key === 'ip') {
+      return rule.dir === 'asc'
+        ? 'Low → High — click to sort High → Low'
+        : 'High → Low — click to sort Low → High';
+    }
+    return rule.dir === 'asc'
+      ? 'Ascending (A → Z) — click to sort descending'
+      : 'Descending (Z → A) — click to sort ascending';
+  }
+
+  function buildSortBarHtml(rules) {
+    const sortIconSvg = `<span class="sort-bar-icon" title="Sort order (up to 3 levels)" aria-hidden="true">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+        <path d="M5 3v10M5 3L2.5 5.5M5 3l2.5 2.5M11 13V3m0 10l-2.5-2.5M11 13l2.5-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>`;
+
+    const caretSvg = `<svg class="sort-key-caret" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+
+    const pillsHtml = rules.map((rule, idx) => {
+      const meta = SORT_OPTION_MAP[rule.key] || SORT_OPTIONS[0];
+      const usedBefore = new Set(rules.slice(0, idx).map((r) => r.key));
+      const optionsHtml = SORT_OPTIONS
+        .filter((opt) => !usedBefore.has(opt.key))
+        .map((opt) => `<option value="${opt.key}" ${opt.key === rule.key ? 'selected' : ''}>${esc(opt.full)}</option>`)
+        .join('');
+
+      const sepHtml = idx > 0 ? `<span class="sort-sep" aria-hidden="true">›</span>` : '';
+      const dirArrow = rule.dir === 'asc' ? '↑' : '↓';
+      const dirTitle = formatDirTooltip(rule);
+      const removeHtml = idx > 0
+        ? `<button type="button" class="sort-rm-btn" data-sort-action="remove" data-idx="${idx}" title="Remove sort level ${idx + 1}" aria-label="Remove sort level ${idx + 1}">×</button>`
+        : '';
+
+      return `${sepHtml}<span class="sort-pill">
+        <span class="sort-key-wrap">
+          <span class="sort-key-text">${esc(meta.short)}</span>
+          ${caretSvg}
+          <select class="sort-key-select" data-sort-action="key" data-idx="${idx}" title="Sort level ${idx + 1}: ${esc(meta.full)}" aria-label="Sort level ${idx + 1}">
+            ${optionsHtml}
+          </select>
+        </span>
+        <button type="button" class="sort-dir-btn" data-sort-action="dir" data-idx="${idx}" title="${esc(dirTitle)}" aria-label="Toggle sort direction for level ${idx + 1}">${dirArrow}</button>
+        ${removeHtml}
+      </span>`;
+    }).join('');
+
+    const addHtml = rules.length < MAX_SORT_RULES
+      ? `<button type="button" class="sort-add-btn" data-sort-action="add" title="Add tie-breaker sort (${rules.length + 1}/${MAX_SORT_RULES})" aria-label="Add sort criterion">+</button>`
+      : '';
+
+    return `${sortIconSvg}${pillsHtml}${addHtml}`;
+  }
+
+  function renderSortBar() {
+    const sortBar = $('sort-bar');
+    if (!sortBar) return;
+    const hasDevices = (ui.snap?.devices?.length || 0) > 0;
+    sortBar.classList.toggle('hidden', !hasDevices);
+    if (!hasDevices) return;
+
+    const sig = JSON.stringify(ui.sortRules);
+    if (ui.renderedSortSig !== sig) {
+      ui.renderedSortSig = sig;
+      sortBar.innerHTML = buildSortBarHtml(ui.sortRules);
+    }
+  }
+
+  async function commitSortRules(nextRules) {
+    const normalized = normalizeSortRules(nextRules);
+    ui.sortRules = normalized;
+    const seq = ++ui.sortPendingSeq;
+    ui.sortPending = true;
+    renderSortBar();
+    renderDevices();
+
+    try {
+      const res = await apiPost('/api/sort', { sortRules: normalized });
+      if (seq === ui.sortPendingSeq) {
+        ui.sortPending = false;
+        if (Array.isArray(res?.sortRules)) {
+          ui.sortRules = normalizeSortRules(res.sortRules);
+          renderSortBar();
+          renderDevices();
+        }
+        if (res?.etag) {
+          ui.etag = res.etag;
+        }
+      }
+    } catch (err) {
+      if (seq === ui.sortPendingSeq) {
+        ui.sortPending = false;
+      }
+      showToast(err.message);
+    }
+  }
+
+  const sortBarEl = $('sort-bar');
+  if (sortBarEl) {
+    sortBarEl.addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-sort-action="key"]');
+      if (!sel) return;
+      const idx = Number(sel.dataset.idx);
+      const newKey = sel.value;
+      if (!ui.sortRules[idx] || !SORT_OPTION_MAP[newKey]) return;
+
+      const next = ui.sortRules.map((r) => ({ ...r }));
+      const prevKey = next[idx].key;
+      if (prevKey === newKey) return;
+
+      // If newKey was already used in a lower-priority slot, swap keys so all levels stay distinct
+      const dupIdx = next.findIndex((r, i) => i > idx && r.key === newKey);
+      next[idx].key = newKey;
+      if (dupIdx !== -1) {
+        next[dupIdx].key = prevKey;
+      }
+      void commitSortRules(next);
+    });
+
+    sortBarEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-sort-action]');
+      if (!btn) return;
+      const action = btn.dataset.sortAction;
+      const idx = Number(btn.dataset.idx);
+
+      if (action === 'dir' && ui.sortRules[idx]) {
+        const next = ui.sortRules.map((r, i) => (
+          i === idx ? { ...r, dir: r.dir === 'asc' ? 'desc' : 'asc' } : { ...r }
+        ));
+        void commitSortRules(next);
+      } else if (action === 'add' && ui.sortRules.length < MAX_SORT_RULES) {
+        const next = [...ui.sortRules.map((r) => ({ ...r })), { key: nextUnusedSortKey(ui.sortRules), dir: 'asc' }];
+        void commitSortRules(next);
+      } else if (action === 'remove' && idx > 0 && ui.sortRules[idx]) {
+        const next = ui.sortRules.filter((_, i) => i !== idx).map((r) => ({ ...r }));
+        void commitSortRules(next);
+      }
+    });
+  }
+
   // ---------- Rendering ----------
   function renderHeader() {
     if (!ui.snap) return;
@@ -700,6 +1009,8 @@
         showToast(activeScan.error);
       }
     }
+
+    renderSortBar();
   }
 
   function buildCardHtml(dev) {
@@ -886,16 +1197,18 @@
 
   function renderDevices() {
     if (!ui.snap) return;
-    const devices = ui.snap.devices || [];
+    const rawDevices = ui.snap.devices || [];
     const emptyEl = $('empty-state');
     const listEl = $('device-list');
 
-    if (devices.length === 0) {
+    if (rawDevices.length === 0) {
       emptyEl.classList.remove('hidden');
       listEl.classList.add('hidden');
       listEl.innerHTML = '';
       return;
     }
+
+    const devices = sortDevices(rawDevices, ui.sortRules);
 
     emptyEl.classList.add('hidden');
     listEl.classList.remove('hidden');
@@ -1050,6 +1363,9 @@
       if (!data.unchanged) {
         ui.etag = data.etag || '';
         ui.snap = data;
+        if (!ui.sortPending && Array.isArray(data.sortRules)) {
+          ui.sortRules = normalizeSortRules(data.sortRules);
+        }
         let hasNewBackendError = false;
         for (const dev of data.devices || []) {
           if (dev.rebootError?.id && ui.seenRebootErrorIds[dev.ip] !== dev.rebootError.id) {
