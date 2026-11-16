@@ -40,7 +40,7 @@ New-Item -ItemType Directory -Path `
     "$regDir\sidecars\scanner" -Force | Out-Null
 
 Copy-Item "$srcRoot\plugin.json" "$regDir\plugin.json" -Force
-Copy-Item "$srcRoot\assets\logo.svg" "$regDir\assets\logo.svg" -Force
+Copy-Item "$srcRoot\assets\*" "$regDir\assets\" -Force
 Copy-Item "$srcRoot\skills\zw-appliance-scanner\SKILL.md" "$regDir\skills\zw-appliance-scanner\SKILL.md" -Force
 if (Test-Path "$srcRoot\README.md") {
     Copy-Item "$srcRoot\README.md" "$regDir\README.md" -Force

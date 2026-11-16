@@ -2,6 +2,14 @@
 
 An Auxiliary Side Pane (**ZW Appliances**), ESP8266-safe subnet discovery engine, and agent skill for developing, deploying, and managing [**`ESPZWApplianceT2`**](https://github.com/Adam5Wu/ESPZWApplianceT2)-based microcontroller appliances in **Google Antigravity**.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/panel-screenshot-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/panel-screenshot-light.png">
+    <img alt="ZW Appliances Auxiliary Side Pane in Google Antigravity" src="assets/panel-screenshot-dark.png" width="540">
+  </picture>
+</p>
+
 ---
 
 ## Why This Exists
@@ -170,7 +178,9 @@ Antigravity-ZWAppsScanner/
 ├── Register-Plugin.ps1                # PowerShell installer for external checkouts (Windows)
 ├── LICENSE                            # MIT License
 ├── assets/
-│   └── logo.svg                       # Plugin icon
+│   ├── logo.svg                       # Plugin icon
+│   ├── panel-screenshot-dark.png      # Auxiliary Side Pane preview (Dark theme)
+│   └── panel-screenshot-light.png     # Auxiliary Side Pane preview (Light theme)
 ├── sidecars/
 │   └── scanner/                       # Antigravity Auxiliary Side Pane web UI, sidecar & CLI
 │       ├── package.json
