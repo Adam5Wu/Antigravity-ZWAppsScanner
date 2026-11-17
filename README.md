@@ -2,19 +2,27 @@
 
 An Auxiliary Side Pane (**ZW Appliances**), ESP8266-safe subnet discovery engine, and agent skill for developing, deploying, and managing [**`ESPZWApplianceT2`**](https://github.com/Adam5Wu/ESPZWApplianceT2)-based microcontroller appliances in **Google Antigravity**.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/panel-screenshot-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/panel-screenshot-light.png">
+    <img alt="ZW Appliances Auxiliary Side Pane in Google Antigravity" src="assets/panel-screenshot-dark.png" width="540">
+  </picture>
+</p>
+
 ---
 
 ## Why This Exists
 
 Developing and maintaining multiple Wi-Fi microcontroller appliances built on [`ESPZWApplianceT2`](https://github.com/Adam5Wu/ESPZWApplianceT2) (such as [`TWiLight`](https://github.com/Adam5Wu/TWiLight) or [`ESPClockMovementMod`](https://github.com/Adam5Wu/ESPClockMovementMod)) across a local subnet runs into several day-to-day friction points:
 
-1. **Dynamic DHCP Leases & Mixed Firmware Fleets**: Appliances move across DHCP addresses over time and run a mix of newer (`v1.1.11+` with `/!sys/discover`) and older (`<= v1.1.10`) middleware builds. Tracking which IP corresponds to which physical unit, firmware build, or staged OTA slot by hand quickly gets stale.
+1. **Dynamic DHCP Leases & Mixed Firmware Fleets**: Appliances move across DHCP addresses over time and run a mix of newer (`v1.1.11+` with `/!sys/discover`) and older (`<= v1.1.10`) middleware builds. Tracking which IP corresponds to which physical unit or firmware build by hand quickly gets stale.
 2. **ESP8266 lwIP & Modem-Sleep Constraints**: Aggressive generic network scanners open concurrent HTTP keep-alive connections per IP (exhausting scarce ESP8266 lwIP sockets), miss devices resting in `WIFI_PS_MIN_MODEM` DTIM beacon sleep (up to ~`550 ms` first-packet wakeup latency), or accidentally hit endpoints like `/!sys/prov/sta.aplist` that trigger blocking active Wi-Fi scans on the MCU.
 3. **Agentic Deployment Context**: When asking an AI agent in Antigravity to *"push the updated web UI to the desk lamp"* or *"check which devices are still on `v1.1.10`"*, the agent needs an up-to-date local inventory mapping human locations, hostnames, MAC addresses, and nicknames to live IPv4 addresses and `boot_serial` tokens.
 
 **Antigravity-ZWAppsScanner** packages all three into a zero-dependency Antigravity plugin:
 
-- **1. `ZW Appliances` Auxiliary Side Pane ([`sidecars/scanner/`](sidecars/scanner/) + [`plugin.json`](plugin.json))**: Compact Light/Dark theme-synced panel inside Antigravity with auto-detected `/24` LAN defaults, dual-action `Refresh` / `Re-scan`, smart background & exponential offline polling, inline local nickname & on-device location editing, 1-click Web UI (`/`) and `/config/` openers, and two-step `boot_serial`-verified reboots.
+- **1. `ZW Appliances` Auxiliary Side Pane ([`sidecars/scanner/`](sidecars/scanner/) + [`plugin.json`](plugin.json))**: Compact Light/Dark theme-synced panel inside Antigravity with auto-detected `/24` LAN defaults, dual-action `Refresh` / `Re-scan`, cascading multi-level device sorting (up to 3 criteria), smart background & exponential offline polling, inline local nickname & on-device location editing, 1-click Web UI (`/`) and `/config/` openers, and two-step `boot_serial`-verified reboots.
 - **2. Mixed-Fleet ESP8266 Discovery Engine & CLI ([`sidecars/scanner/scanner.mjs`](sidecars/scanner/scanner.mjs))**: Pure Node.js ESM module (`0` external npm packages) that sweeps a `/24` subnet in ~`1.5–2.5s` (`32` workers across distinct IPs, strictly serialized `Connection: close` per IP, `750 ms` timeout + `1` DTIM wakeup retry), supporting both `v1.1.11+` (`GET /!sys/discover` with hardware MAC reconciliation across DHCP changes) and `<= v1.1.10` (`GET /!sys/boot_serial` + `GET /!sys/ota/state`).
 - **3. Bundled Agent Skill ([`skills/zw-appliance-scanner/SKILL.md`](skills/zw-appliance-scanner/SKILL.md))**: Teaches Antigravity agents how to open the `[ZW Appliances](sidecar://esp-zw-app-scanner/scanner/)` panel, resolve device locations/hostnames/MACs/nicknames from persisted `state.json`, run CLI scans when needed, and follow `ESPZWApplianceT2` HTTP safety rules.
 
@@ -95,6 +103,7 @@ powershell -ExecutionPolicy Bypass -File .\Register-Plugin.ps1
 | :--- | :--- |
 | **Range Bar (`prefix . start – end`)** | Edit `/24` prefix and start/end octets (`1–254`). Supports **mouse wheel** (`±1`, or `Shift + Wheel` for `±10`), **clipboard paste** (`192.168.1.32-127`, `192.168.1.0/24`, `192.168.1.50`), and 1-click **`All`** reset when narrowed. |
 | **`Scan` / `Refresh` / `Re-scan`** | Shows **`Scan`** when no devices are listed. Once entries exist, becomes **`Refresh`**: **1st click** starts a `1.5s` countdown bar (`Re-scan`) and re-probes known entries when the timer finishes; **2nd click** before timeout triggers a full subnet/range sweep (`Esc` cancels). |
+| **Cascading Sort Pills (up to 3)** | Inline progressive sort bar below the range bar (`IP`, `Name` (`Nick / Host`), `Nick`, `Host`, `Location`, `App`). Click `↑`/`↓` per criterion to flip ascending/descending (`App` always orders `version + buildTime` newest → oldest), `+` to add tie-breakers, and `×` to remove; persisted across restarts. |
 | **Background & Offline Polling** | Refreshes listed entries on panel open and every **5 minutes**. Newly offline devices are individually polled every **`7s`** in minute 1, doubling each minute (`14s` → `28s` → `56s` → `112s`) until handing back to the 5-minute cycle. |
 | **Hostname / Local Nickname** | Displays `Host name: <hostname>` on `v1.1.11+` devices (or `Set nickname…` on legacy devices). Click to set a local nickname — automatically indexed by hardware MAC on `v1.1.11+` so nicknames follow appliances across DHCP IP changes. |
 | **Location Pin (`v1.1.11+`)** | Inline `Set location…` / colored pin button next to the title. Click while online to persist `{ "location" }` (`<= 64` UTF-8 bytes) directly to `/storage/app_config.json` on the MCU via `PUT /!sys/config?section=identity`. |
@@ -158,7 +167,7 @@ Emits structured JSON to `stdout`:
 | Firmware Version | Discovery Path | Supported Capabilities |
 | :--- | :--- | :--- |
 | **`ESPZWApplianceT2 v1.1.11+`** | Single `GET /!sys/discover` | Fast 1-request discovery, hardware `mac` tracking across DHCP IP changes, MAC-bound local nicknames, `hostname` display, inline on-device `location` editing (`PUT /!sys/config?section=identity`), and verified reboot. |
-| **Legacy (`<= v1.1.10`)** | `GET /!sys/boot_serial` → `GET /!sys/ota/state` *(→ `<title>` fallback if `403`)* | Firmware project/version/build timestamp, staged OTA `next:` badge when an alternate slot is pending reboot, IP-bound local nicknames, Web UI links, and verified reboot. |
+| **Legacy (`<= v1.1.10`)** | `GET /!sys/boot_serial` → `GET /!sys/ota/state` *(→ `<title>` fallback if `403`)* | Firmware project/version/build timestamp, IP-bound local nicknames, Web UI links, and verified reboot. |
 
 ---
 
@@ -170,7 +179,9 @@ Antigravity-ZWAppsScanner/
 ├── Register-Plugin.ps1                # PowerShell installer for external checkouts (Windows)
 ├── LICENSE                            # MIT License
 ├── assets/
-│   └── logo.svg                       # Plugin icon
+│   ├── logo.svg                       # Plugin icon
+│   ├── panel-screenshot-dark.png      # Auxiliary Side Pane preview (Dark theme)
+│   └── panel-screenshot-light.png     # Auxiliary Side Pane preview (Light theme)
 ├── sidecars/
 │   └── scanner/                       # Antigravity Auxiliary Side Pane web UI, sidecar & CLI
 │       ├── package.json
